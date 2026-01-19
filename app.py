@@ -151,5 +151,5 @@ def get_file(task_id, ext, title):
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    # Web公開時は debug=False にするのが安全です
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    # allow_unsafe_werkzeug=True を追加してエラーを回避します
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
