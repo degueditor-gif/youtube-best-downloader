@@ -5,80 +5,84 @@
   <title>Tadokoro Downloader</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #111;
-      color: #fff;
+      background: #0f0f13;
+      color: white;
+      font-family: sans-serif;
       display: flex;
-      justify-content: center;
-      align-items: center;
       height: 100vh;
+      align-items: center;
+      justify-content: center;
     }
     .box {
-      background: #1e1e1e;
+      background: #1a1a22;
       padding: 30px;
-      border-radius: 10px;
-      width: 350px;
+      border-radius: 12px;
+      width: 360px;
     }
     input, select, button {
       width: 100%;
       padding: 10px;
       margin-top: 10px;
-      border-radius: 5px;
+      border-radius: 6px;
       border: none;
     }
     button {
       background: #00bfff;
-      color: #000;
-      font-weight: bold;
       cursor: pointer;
+      font-weight: bold;
     }
-    #result {
-      margin-top: 15px;
-      word-break: break-all;
+    .status {
+      margin-top: 10px;
+      font-size: 14px;
     }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h2>🎬 Tadokoro Downloader</h2>
 
-    <input id="url" placeholder="YouTube URL を貼る">
+<div class="box">
+  <h2>Tadokoro Downloader</h2>
 
-    <select id="mode">
-      <option value="mp4">MP4（動画）</option>
-      <option value="mp3">MP3（音声）</option>
-    </select>
+  <input id="url" placeholder="YouTube URL">
 
-    <button onclick="download()">ダウンロード</button>
+  <select id="format">
+    <option value="mp3">MP3（音声）</option>
+    <option value="mp4">MP4（動画）</option>
+  </select>
 
-    <div id="result"></div>
-  </div>
+  <button onclick="download()">ダウンロード</button>
 
-  <script>
-    async function download() {
-      const url = document.getElementById("url").value;
-      const mode = document.getElementById("mode").value;
-      const result = document.getElementById("result");
+  <div class="status" id="status"></div>
+</div>
 
-      result.innerHTML = "⏳ 処理中...";
+<script>
+function download() {
+  const url = document.getElementById("url").value;
+  const format = document.getElementById("format").value;
+  const status = document.getElementById("status");
 
-      const res = await fetch("/enqueue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, mode })
-      });
+  status.textContent = "処理中…";
 
-      const data = await res.json();
-
-      if (data.download_url) {
-        result.innerHTML = `
-          ✅ 完了<br>
-          <a href="${data.download_url}" style="color:#0f0">▶ ダウンロード</a>
-        `;
-      } else {
-        result.innerHTML = "❌ エラー<br>" + data.error;
-      }
+  fetch("/download", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, format })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.task_id) {
+      status.textContent = "ダウンロード準備中…";
+      setTimeout(() => {
+        window.location.href = `/file/${data.task_id}`;
+      }, 2000);
+    } else {
+      status.textContent = "エラー";
     }
-  </script>
+  })
+  .catch(() => {
+    status.textContent = "通信エラー";
+  });
+}
+</script>
+
 </body>
 </html>
