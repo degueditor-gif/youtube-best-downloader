@@ -1,76 +1,21 @@
-import os
-import uuid
-from flask import Flask, request, jsonify, send_file, render_template
+from flask import Flask, request, jsonify, send_from_directory
 import yt_dlp
+import os
+import threading
+import uuid
 
 app = Flask(__name__)
 
-# =====================
-# 設定
-# =====================
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-COMMON_OPTS = {
-    "quiet": True,
-    "no_warnings": True,
-    "js_runtimes": ["node"],  # YouTube SABR / JS必須
-    "http_headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    },
-    "source_address": "0.0.0.0",  # IPv6問題回避
-}
 
-# =====================
-# トップページ（HTML）
-# =====================
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-# =====================
-# 動画情報取得（任意）
-# =====================
-@app.route("/get_info", methods=["POST"])
-def get_info():
-    url = request.json.get("url")
-    if not url:
-        return jsonify({"error": "URL is required"}), 400
-
+def download_task(url, format_type, task_id):
     try:
-        with yt_dlp.YoutubeDL(COMMON_OPTS) as ydl:
-            info = ydl.extract_info(url, download=False)
-
-        return jsonify({
-            "title": info.get("title"),
-            "duration": info.get("duration"),
-            "thumbnail": info.get("thumbnail")
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# =====================
-# ダウンロード処理
-# =====================
-@app.route("/enqueue", methods=["POST"])
-def enqueue():
-    url = request.json.get("url")
-    mode = request.json.get("mode", "mp4")  # mp4 / mp3
-
-    if not url:
-        return jsonify({"error": "URL is required"}), 400
-
-    file_id = str(uuid.uuid4())
-
-    try:
-        if mode == "mp3":
-            filename = f"{file_id}.mp3"
-            filepath = os.path.join(DOWNLOAD_DIR, filename)
-
+        if format_type == "mp3":
             ydl_opts = {
-                **COMMON_OPTS,
-                "format": "bestaudio",
-                "outtmpl": filepath,
+                "format": "bestaudio/best",
+                "outtmpl": f"{DOWNLOAD_DIR}/{task_id}.%(ext)s",
                 "postprocessors": [
                     {
                         "key": "FFmpegExtractAudio",
@@ -78,48 +23,60 @@ def enqueue():
                         "preferredquality": "192",
                     }
                 ],
+                "quiet": True,
+                "no_warnings": True,
             }
-        else:
-            filename = f"{file_id}.mp4"
-            filepath = os.path.join(DOWNLOAD_DIR, filename)
 
+        else:  # mp4
             ydl_opts = {
-                **COMMON_OPTS,
-                "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
+                "format": "bestvideo+bestaudio/best",
+                "outtmpl": f"{DOWNLOAD_DIR}/{task_id}.%(ext)s",
                 "merge_output_format": "mp4",
-                "outtmpl": filepath,
+                "quiet": True,
+                "no_warnings": True,
             }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        # 空ファイル対策
-        if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
-            raise Exception("Downloaded file is empty")
-
-        return jsonify({
-            "status": "completed",
-            "download_url": f"/download/{filename}"
-        })
-
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("❌ Download error:", e)
 
-# =====================
-# ファイル配信
-# =====================
-@app.route("/download/<filename>")
-def download_file(filename):
-    filepath = os.path.join(DOWNLOAD_DIR, filename)
 
-    if not os.path.exists(filepath):
-        return jsonify({"error": "File not found"}), 404
+@app.route("/download", methods=["POST"])
+def download():
+    data = request.json
+    url = data.get("url")
+    format_type = data.get("format")
 
-    return send_file(filepath, as_attachment=True)
+    if not url or format_type not in ["mp3", "mp4"]:
+        return jsonify({"error": "invalid request"}), 400
 
-# =====================
-# 起動（Render / Railway）
-# =====================
+    task_id = str(uuid.uuid4())
+
+    thread = threading.Thread(
+        target=download_task,
+        args=(url, format_type, task_id),
+        daemon=True
+    )
+    thread.start()
+
+    return jsonify({"task_id": task_id})
+
+
+@app.route("/file/<task_id>")
+def get_file(task_id):
+    for file in os.listdir(DOWNLOAD_DIR):
+        if file.startswith(task_id):
+            return send_from_directory(DOWNLOAD_DIR, file, as_attachment=True)
+
+    return jsonify({"error": "file not ready"}), 404
+
+
+@app.route("/")
+def index():
+    return "Tadokoro Downloader API is running"
+
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=5000)
