@@ -1,6 +1,6 @@
 import os
 import uuid
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template
 import yt_dlp
 
 app = Flask(__name__)
@@ -14,7 +14,7 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 COMMON_OPTS = {
     "quiet": True,
     "no_warnings": True,
-    "js_runtimes": ["node"],  # YouTube SABR / JS対策
+    "js_runtimes": ["node"],  # YouTube SABR / JS必須
     "http_headers": {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     },
@@ -22,14 +22,14 @@ COMMON_OPTS = {
 }
 
 # =====================
-# トップページ（重要）
+# トップページ（HTML）
 # =====================
 @app.route("/")
 def index():
-    return "Tadokoro Downloader API is running"
+    return render_template("index.html")
 
 # =====================
-# 動画情報取得
+# 動画情報取得（任意）
 # =====================
 @app.route("/get_info", methods=["POST"])
 def get_info():
@@ -46,7 +46,6 @@ def get_info():
             "duration": info.get("duration"),
             "thumbnail": info.get("thumbnail")
         })
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -56,7 +55,7 @@ def get_info():
 @app.route("/enqueue", methods=["POST"])
 def enqueue():
     url = request.json.get("url")
-    mode = request.json.get("mode", "mp4")  # mp4 or mp3
+    mode = request.json.get("mode", "mp4")  # mp4 / mp3
 
     if not url:
         return jsonify({"error": "URL is required"}), 400
@@ -80,7 +79,6 @@ def enqueue():
                     }
                 ],
             }
-
         else:
             filename = f"{file_id}.mp4"
             filepath = os.path.join(DOWNLOAD_DIR, filename)
