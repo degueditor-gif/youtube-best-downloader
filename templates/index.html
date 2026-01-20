@@ -49,18 +49,18 @@
     <option value="mp4">MP4（動画）</option>
   </select>
 
-  <button onclick="download()">ダウンロード</button>
+  <button onclick="start()">ダウンロード</button>
 
   <div class="status" id="status"></div>
 </div>
 
 <script>
-function download() {
+function start() {
   const url = document.getElementById("url").value;
   const format = document.getElementById("format").value;
   const status = document.getElementById("status");
 
-  status.textContent = "ダウンロード中…";
+  status.textContent = "処理中…";
 
   fetch("/download", {
     method: "POST",
@@ -69,16 +69,23 @@ function download() {
   })
   .then(res => res.json())
   .then(data => {
-    if (data.filename) {
-      status.textContent = "完了！";
-      window.location.href = `/file/${encodeURIComponent(data.filename)}`;
-    } else {
-      status.textContent = "エラー";
-    }
-  })
-  .catch(() => {
-    status.textContent = "通信エラー";
+    checkStatus(data.task_id);
   });
+}
+
+function checkStatus(taskId) {
+  fetch(`/status/${taskId}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === "PROCESSING") {
+        setTimeout(() => checkStatus(taskId), 2000);
+      } else if (data.status === "ERROR") {
+        document.getElementById("status").textContent = "エラーが発生しました";
+      } else {
+        document.getElementById("status").textContent = "完了！";
+        window.location.href = `/file/${encodeURIComponent(data.status)}`;
+      }
+    });
 }
 </script>
 
