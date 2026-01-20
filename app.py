@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 import yt_dlp
 import os
 import threading
@@ -26,7 +26,6 @@ def download_task(url, format_type, task_id):
                 "quiet": True,
                 "no_warnings": True,
             }
-
         else:  # mp4
             ydl_opts = {
                 "format": "bestvideo+bestaudio/best",
@@ -41,6 +40,11 @@ def download_task(url, format_type, task_id):
 
     except Exception as e:
         print("❌ Download error:", e)
+
+
+@app.route("/")
+def index():
+    return render_template("index.html")
 
 
 @app.route("/download", methods=["POST"])
@@ -68,17 +72,15 @@ def download():
 def get_file(task_id):
     for file in os.listdir(DOWNLOAD_DIR):
         if file.startswith(task_id):
-            return send_from_directory(DOWNLOAD_DIR, file, as_attachment=True)
+            return send_from_directory(
+                DOWNLOAD_DIR,
+                file,
+                as_attachment=True
+            )
 
     return jsonify({"error": "file not ready"}), 404
-
-
-@app.route("/")
-def index():
-    return "Tadokoro Downloader API is running"
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
