@@ -1,0 +1,6 @@
+[phases.setup]
+aptPkgs = [
+  "ffmpeg",
+  "nodejs",
+  "npm"
+]
