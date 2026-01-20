@@ -5,25 +5,32 @@ import yt_dlp
 
 app = Flask(__name__)
 
+# =====================
+# 設定
+# =====================
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# =========================
-# 共通 yt-dlp オプション
-# =========================
 COMMON_OPTS = {
     "quiet": True,
     "no_warnings": True,
-    "js_runtimes": ["node"],  # ★超重要（SABR / JS対策）
+    "js_runtimes": ["node"],  # YouTube SABR / JS対策
     "http_headers": {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     },
     "source_address": "0.0.0.0",  # IPv6問題回避
 }
 
-# =========================
+# =====================
+# トップページ（重要）
+# =====================
+@app.route("/")
+def index():
+    return "Tadokoro Downloader API is running"
+
+# =====================
 # 動画情報取得
-# =========================
+# =====================
 @app.route("/get_info", methods=["POST"])
 def get_info():
     url = request.json.get("url")
@@ -39,13 +46,13 @@ def get_info():
             "duration": info.get("duration"),
             "thumbnail": info.get("thumbnail")
         })
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# =========================
-# ダウンロード（mp4 / mp3）
-# =========================
+# =====================
+# ダウンロード処理
+# =====================
 @app.route("/enqueue", methods=["POST"])
 def enqueue():
     url = request.json.get("url")
@@ -65,14 +72,16 @@ def enqueue():
                 **COMMON_OPTS,
                 "format": "bestaudio",
                 "outtmpl": filepath,
-                "postprocessors": [{
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "192",
-                }],
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "192",
+                    }
+                ],
             }
 
-        else:  # mp4
+        else:
             filename = f"{file_id}.mp4"
             filepath = os.path.join(DOWNLOAD_DIR, filename)
 
@@ -86,7 +95,7 @@ def enqueue():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        # ===== 空ファイル対策 =====
+        # 空ファイル対策
         if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
             raise Exception("Downloaded file is empty")
 
@@ -98,10 +107,9 @@ def enqueue():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# =========================
+# =====================
 # ファイル配信
-# =========================
+# =====================
 @app.route("/download/<filename>")
 def download_file(filename):
     filepath = os.path.join(DOWNLOAD_DIR, filename)
@@ -111,10 +119,9 @@ def download_file(filename):
 
     return send_file(filepath, as_attachment=True)
 
-
-# =========================
-# Railway / Render 対応
-# =========================
+# =====================
+# 起動（Render / Railway）
+# =====================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
